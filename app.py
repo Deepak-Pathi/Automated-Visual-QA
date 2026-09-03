@@ -3,46 +3,109 @@ import tensorflow as tf
 import numpy as np
 from PIL import Image
 
-# 1. Page Configuration
-st.set_page_config(page_title="Factory QA Pipeline", layout="centered")
-st.title("⚙️ Automated Visual Quality Control")
-st.write("Upload an image of a casted metal impeller to instantly detect manufacturing defects.")
+# Page configuration
+st.set_page_config(
+    page_title="Factory QA Dashboard",
+    page_icon="⚙️",
+    layout="wide",
+)
 
-# 2. Load the trained model (Cached so it doesn't reload on every button click)
+# Sidebar
+with st.sidebar:
+    st.header("⚙️ Factory QA Pipeline")
+    st.markdown(
+        """
+        This application uses a trained CNN model to inspect cast metal
+        impellers and identify visible manufacturing defects.
+        """
+    )
+    st.divider()
+    st.write("**Developed by:** LAKSHMI DEEPAK P")
+
+# Main dashboard
+st.title("Automated Visual Quality Control")
+st.caption("AI-powered casting defect inspection dashboard")
+
+# Load the trained model
 @st.cache_resource
 def load_model():
-    return tf.keras.models.load_model('casting_defect_model.keras')
+    return tf.keras.models.load_model("casting_defect_model.keras")
+
 
 model = load_model()
 
-# 3. Create the File Uploader
-uploaded_file = st.file_uploader("Drop a casting image here...", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader(
+    "Upload a casting image",
+    type=["jpg", "jpeg", "png"],
+)
 
 if uploaded_file is not None:
-    # Display the uploaded image
     image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Factory Part", use_container_width=True)
 
-    # 4. Preprocess the image to match our training data
-    # Convert to grayscale, resize to 300x300, convert to array, and expand dimensions
-    img = image.convert("L") 
-    img = img.resize((300, 300))
-    img_array = np.array(img)
-    img_array = np.expand_dims(img_array, axis=0) # Shape becomes (1, 300, 300, 1)
+    # Preprocess image
+    grayscale_image = image.convert("L").resize((300, 300))
+    image_array = np.array(grayscale_image, dtype=np.float32)
+    image_array = np.expand_dims(image_array, axis=(0, -1))
 
-    # 5. Make the Prediction
-    st.write("Running inspection...")
-    prediction = model.predict(img_array)
-    
-    # 6. Display the Results
-    st.divider()
-    # Remember: 0 is Ok (def_front is not detected), 1 is Defective (depending on how classes were sorted)
-    # tf.keras.utils.image_dataset_from_directory sorts folders alphabetically: 'def_front' is 0, 'ok_front' is 1.
-    
-    # Let's dynamically check the score. Since 'def_front' is class 0 and 'ok_front' is class 1:
-    score = prediction[0][0]
-    
-    if score > 0.5:
-        st.success(f"✅ **PASS**: This part is OK. (Confidence: {score*100:.2f}%)")
+    # Prediction
+    with st.spinner("Running AI inspection..."):
+        prediction = model.predict(image_array, verbose=0)
+
+    # Class 0 = def_front, Class 1 = ok_front
+    ok_score = float(prediction[0][0])
+    defect_score = 1.0 - ok_score
+
+    if ok_score >= 0.5:
+        result = "PASS"
+        confidence = ok_score
+        result_color = "success"
     else:
-        st.error(f"🚨 **FAIL**: Defect Detected! (Confidence: {(1-score)*100:.2f}%)")
+        result = "FAIL"
+        confidence = defect_score
+        result_color = "error"
+
+    left_column, right_column = st.columns(2)
+
+    with left_column:
+        st.subheader("Inspected Component")
+        st.image(
+            image,
+            caption="Uploaded Factory Part",
+            use_container_width=True,
+        )
+
+    with right_column:
+        st.subheader("Inspection Result")
+
+        if result_color == "success":
+            st.success("✅ PASS — Part classified as OK")
+        else:
+            st.error("🚨 FAIL — Defect detected")
+
+        st.metric(
+            label="Model Confidence",
+            value=f"{confidence * 100:.2f}%",
+        )
+
+        st.progress(confidence)
+
+        st.write(f"**OK probability:** {ok_score * 100:.2f}%")
+        st.write(f"**Defect probability:** {defect_score * 100:.2f}%")
+
+# Technical details
+with st.expander("Technical Details"):
+    st.markdown(
+        """
+        The application uses a Convolutional Neural Network (CNN) to extract
+        visual features from the grayscale casting image.
+
+        The image is resized to **300 × 300 pixels** before inference.
+        Convolutional layers identify patterns such as cracks, surface damage,
+        and casting irregularities.
+
+        **GlobalAveragePooling2D** reduces each extracted feature map to a
+        single value before classification. This decreases the number of
+        trainable parameters, reduces overfitting, and makes the model more
+        computationally efficient than using a large fully connected layer.
+        """
+    )
