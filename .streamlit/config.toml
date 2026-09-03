@@ -1,0 +1,15 @@
+[theme]
+# The primary accent color for interactive elements (Enterprise Blue)
+primaryColor = "#0070F2"
+
+# The main background color for the app (Deep Slate/Dark Mode)
+backgroundColor = "#0E1117"
+
+# The background for the sidebar and input widgets (Slightly lighter gray)
+secondaryBackgroundColor = "#262730"
+
+# The color of the text
+textColor = "#FAFAFA"
+
+# The font family
+font = "sans serif"
